@@ -71,7 +71,10 @@ class Heat1DCrankNicolson:
         return T
 
     def info(self):
-        print("Time scale coeff:", self.L * self.L / self.D)
-        print("dx:", self.dx)
-        print("dt:", self.dt)
-        print("r:", self.r)
+        print(f"---------- Solver info")
+        print(f"Time scale coeff:       {self.L * self.L / self.D:.2e}")
+        print(f"dx:                     {self.dx:.2e}")
+        print(f"dt:                     {self.dt:.2e}")
+        print(f"nt:                     {self.nt:.0f}")
+        print(f"nx:                     {self.nx:.0f}")
+        print(f"r:                      {self.r:.2e}")
