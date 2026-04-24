@@ -59,13 +59,16 @@ class Heat1DCrankNicolson:
         # Condizione iniziale
         T[:, 0] = 0
 
-        # Boundary destra
+        # Boundary sinistro
         T[0, 0] = f[0]
 
         for n in range(1, self.nt):
+            # Compute B*Theta
             b = self.B @ T[:, n-1]
-            #b[0] = f[n]  # Dirichlet
+            # Summ the vector b
+            #b[0] = (f[n] + f[n-1])/2
             b[0] = f[n]
+        
             T[:, n] = lu_solve((self.lu, self.piv), b)
 
         return T
