@@ -1,7 +1,5 @@
 # generate_f_from_white_noise.py>
 
-
-
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -52,3 +50,24 @@ def generate_random_f_from_white_noise(t_array: np.ndarray, filter, sigma_white_
         plt.show()
 
     return f_filtered
+
+
+def generate_f_as_Gaussian_Process(n : int ,N_samples : int = 1,low : float = 0, high : float = 1, l : float = 0.1, sigma : float = 1) -> np.ndarray:
+    
+    # Space array
+    x_array = np.linspace(low, high, n)
+
+    # Gaussian kernel
+    def kernel(x1, x2, l: np.array=0.1, sigma: np.ndarray = 1):
+        sqdist = (x1[:, None] - x2[None, :])**2
+        return (sigma*sigma)*np.exp(-sqdist / (2 * l**2))
+
+    # Covariance Matrix
+    K = kernel(x_array, x_array, l=l, sigma=sigma)
+ 
+    #K += 1e-8 * np.eye(n)
+
+    # Sample
+    u = np.random.multivariate_normal(mean=np.zeros(n), cov=K, size=N_samples).T
+    
+    return u
