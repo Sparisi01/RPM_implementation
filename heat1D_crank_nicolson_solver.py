@@ -73,18 +73,19 @@ class Heat1DCrankNicolson:
 
         return T
     
-    def impulse_response(self,nx):
+    def impulse_response(self):
+
         # Definisci impulso
         impulse = np.zeros(self.nt)
-
         impulse[0] = 1/self.dt
         
+        # Solve impulse response
         response = self.solve(impulse)
 
-        return response[nx,:]
+        return response
 
     def info(self):
-        print(f"---------- Solver info")
+        print(f"|---------- Solver info ----------|")
         print(f"Time scale coeff:       {self.L * self.L / self.D:.2e}")
         print(f"dx:                     {self.dx:.2e}")
         print(f"dt:                     {self.dt:.2e}")

@@ -1,0 +1,36 @@
+figure.figsize: 3.4, 2.2
+
+text.usetex: True
+font.family: serif
+font.serif: Computer Modern Roman
+
+font.size: 9
+axes.titlesize: 9
+axes.labelsize: 9
+xtick.labelsize: 8
+ytick.labelsize: 8
+legend.fontsize: 8
+
+lines.linewidth: 1.2
+axes.linewidth: 0.8
+xtick.major.width: 0.8
+ytick.major.width: 0.8
+xtick.minor.width: 0.6
+ytick.minor.width: 0.6
+
+xtick.direction: in
+ytick.direction: in
+xtick.top: True
+ytick.right: True
+
+grid.linestyle: :
+grid.linewidth: 0.4
+grid.alpha: 0.5
+
+legend.frameon: False
+
+figure.constrained_layout.use: True
+figure.constrained_layout.h_pad: 0.02
+figure.constrained_layout.w_pad: 0.02
+figure.constrained_layout.hspace: 0.02
+figure.constrained_layout.wspace: 0.02
