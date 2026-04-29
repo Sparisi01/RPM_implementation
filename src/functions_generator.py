@@ -29,14 +29,17 @@ class FunctionsGenerator:
     
     def generate_from_white_noise(self) -> np.ndarray:
         
+        # Sample white noise and compute its FFT 
         f = np.random.normal(0, 1, self.nt)
         f_hat = np.fft.rfft(f)
 
+        # Define the power spectrum
         S = self.sigma**2 * np.sqrt(2 * np.pi) * self.l * np.exp(-0.5 * self.l**2 * self.omegas**2)
 
-        # dividere per dt per correggere fattore di normalizzazione della fft discreta di numpy
+        # Perform convolution in Fourier space (Note: the factor 1/dt comes from the discretization of the numpy FFT,
+        # it is required for keeping the right f variance)
         f_hat_filtered = f_hat * np.sqrt(S / self.dt)
-
+        
         f_filtered = np.fft.irfft(f_hat_filtered, n=self.nt)
         return f_filtered
 
