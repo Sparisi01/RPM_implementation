@@ -72,6 +72,16 @@ class Heat1DCrankNicolson:
             T[:, n] = lu_solve((self.lu, self.piv), b)
 
         return T
+    
+    def impulse_response(self,nx):
+        # Definisci impulso
+        impulse = np.zeros(self.nt)
+
+        impulse[0] = 1/self.dt
+        
+        response = self.solve(impulse)
+
+        return response[nx,:]
 
     def info(self):
         print(f"---------- Solver info")
