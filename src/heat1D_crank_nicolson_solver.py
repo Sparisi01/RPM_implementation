@@ -21,13 +21,12 @@ class Heat1DCrankNicolson:
         self.x_array = np.linspace(0, L, self.nx)
         self.t_array = np.linspace(0, Tf, nt)
 
+        self._build_matrices()
+    '''
+    def _build_matrices(self):
         self.A = np.zeros((self.nx, self.nx))
         self.B = np.zeros((self.nx, self.nx))
-
-        self._build_matrices()
-        self.lu, self.piv = lu_factor(self.A)
-
-    def _build_matrices(self):
+        
         # Nodi interni
         for i in range(1, self.nx - 1):
             self.A[i, i-1] = -self.r / 2
@@ -66,24 +65,77 @@ class Heat1DCrankNicolson:
             # Compute B*Theta
             b = self.B @ T[:, n-1]
             # Summ the vector b
-            #b[0] = (f[n] + f[n-1])/2
+            # b[0] = (f[n] + f[n-1])/2
             b[0] = f[n]
         
             T[:, n] = lu_solve((self.lu, self.piv), b)
 
         return T
+    '''
+    def _build_matrices(self):
+        
+        n = self.nx - 1   # Escludo il bordo sinistro
+        
+        self.A = np.zeros((n, n))
+        self.B = np.zeros((n, n))
+        
+        # Nodi interni: i = 1...nx-1
+        for i in range(n - 1):   # tutti tranne l'ultimo (Robin)
+            self.A[i, i]   =  1 + self.r
+            self.B[i, i]   =  1 - self.r
+            if i > 0:
+                self.A[i, i-1] = -self.r / 2
+                self.B[i, i-1] =  self.r / 2
+            if i < n - 1:
+                self.A[i, i+1] = -self.r / 2
+                self.B[i, i+1] =  self.r / 2
+        
+        # Bordo Robin
+        alpha = 2 * self.r
+
+        self.A[-1, -2] = -alpha / 2
+        self.A[-1, -1] = 1 + alpha/2 * (1 + self.h * self.dx)
+
+        self.B[-1, -2] = alpha / 2
+        self.B[-1, -1] = 1 - alpha/2 * (1 + self.h * self.dx)
+        
+        self.lu, self.piv = lu_factor(self.A)
+
+    def solve(self, f):
+        n = self.nx - 1
+        T_inner = np.zeros((n, self.nt))
+        T = np.zeros((self.nx, self.nt))
+        
+        # Condizione iniziale zero, bordo sinistro al tempo 0
+        T[0, 0] = f[0]
+        
+        for step in range(1, self.nt):
+            b = self.B @ T_inner[:, step-1]
+            
+            # Contributo bordo sinistro: forma trapezoidale
+            b[0] += (self.r / 2) * (f[step-1] + f[step])
+            
+            T_inner[:, step] = lu_solve((self.lu, self.piv), b)
+        
+        # Ricostruisci soluzione completa
+        T[0, :]  = f
+        T[1:, :] = T_inner
+        
+        return T
+    
     
     def impulse_response(self):
 
         # Definisci impulso
         impulse = np.zeros(self.nt)
-        impulse[0] = 1/self.dt
+        impulse[0] = 2/self.dt
         
         # Solve impulse response
         response = self.solve(impulse)
 
         return response
-
+    
+    
     def info(self):
         print(f"|---------- Solver info ----------|")
         print(f"Time scale coeff:       {self.L * self.L / self.D:.2e}")
@@ -92,3 +144,5 @@ class Heat1DCrankNicolson:
         print(f"nt:                     {self.nt:.0f}")
         print(f"nx:                     {self.nx:.0f}")
         print(f"r:                      {self.r:.2e}")
+        print(f"h:                      {self.h:.2e}")
+        
