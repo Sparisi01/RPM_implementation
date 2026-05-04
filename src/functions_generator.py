@@ -18,7 +18,7 @@ class FunctionsGenerator:
         self.freqs = np.fft.rfftfreq(self.nt, self.dt)
         self.omegas = 2 * np.pi * self.freqs
         
-        self.K = self.compute_covariance_matrix()
+        self.K = None
     
     def compute_covariance_matrix(self, numerical_stability_factor: float = 1e-8) -> np.ndarray:
         return self._gaussian_kernel(self.t_array, self.t_array) + numerical_stability_factor * np.eye(self.nt)
@@ -44,5 +44,9 @@ class FunctionsGenerator:
         return f_filtered
 
     def generate_from_Gaussian_Process(self) -> np.ndarray:
+        
+        if self.K is None: 
+            self.compute_covariance_matrix()
+        
         u = np.random.multivariate_normal(mean=np.zeros(self.nt), cov=self.K)
         return u

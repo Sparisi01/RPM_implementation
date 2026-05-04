@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.linalg import lu_factor, lu_solve
+from src.print_utils import print_kv, print_section
 
 class Heat1DCrankNicolson:
 
@@ -74,13 +75,13 @@ class Heat1DCrankNicolson:
     '''
     def _build_matrices(self):
         
-        n = self.nx - 1   # Escludo il bordo sinistro
+        n = self.nx - 1
         
         self.A = np.zeros((n, n))
         self.B = np.zeros((n, n))
         
         # Nodi interni: i = 1...nx-1
-        for i in range(n - 1):   # tutti tranne l'ultimo (Robin)
+        for i in range(n - 1):
             self.A[i, i]   =  1 + self.r
             self.B[i, i]   =  1 - self.r
             if i > 0:
@@ -123,6 +124,21 @@ class Heat1DCrankNicolson:
         
         return T
     
+    def solve_from_impulse_response(self, f, impulse_response):
+        
+        n = (2*self.nt - 1) 
+        
+        f_trap = np.empty_like(f)
+        f_trap[:-1] = (f[:-1] + f[1:]) / 2
+        f_trap[-1] = f[-1] / 2
+
+        F = np.fft.rfft(f_trap, n)
+        H = np.fft.rfft(impulse_response, n)
+        
+        if F.shape != H.shape:
+            raise ValueError("Frequency-domain shapes do not match")
+    
+        return np.fft.irfft(F * H,n)[:self.nt] * self.dt   
     
     def impulse_response(self):
 
@@ -137,12 +153,12 @@ class Heat1DCrankNicolson:
     
     
     def info(self):
-        print(f"|---------- Solver info ----------|")
-        print(f"Time scale coeff:       {self.L * self.L / self.D:.2e}")
-        print(f"dx:                     {self.dx:.2e}")
-        print(f"dt:                     {self.dt:.2e}")
-        print(f"nt:                     {self.nt:.0f}")
-        print(f"nx:                     {self.nx:.0f}")
-        print(f"r:                      {self.r:.2e}")
-        print(f"h:                      {self.h:.2e}")
+        print_section(f"Solver info")
+        print_kv(f"Time scale coeff:", f"{self.L * self.L / self.D:.2e}")
+        print_kv(f"dx:              ", f"{self.dx:.2e}")
+        print_kv(f"dt:              ", f"{self.dt:.2e}")
+        print_kv(f"nt:              ", f"{self.nt:.0f}")
+        print_kv(f"nx:              ", f"{self.nx:.0f}")
+        print_kv(f"r:               ", f"{self.r:.2e}")
+        print_kv(f"h:               ", f"{self.h:.2e}")
         
