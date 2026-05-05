@@ -25,56 +25,7 @@ class Heat1DCrankNicolson:
         self.t_array = np.linspace(0, Tf, nt)
 
         self._build_matrices()
-    '''
-    def _build_matrices(self):
-        self.A = np.zeros((self.nx, self.nx))
-        self.B = np.zeros((self.nx, self.nx))
-        
-        # Nodi interni
-        for i in range(1, self.nx - 1):
-            self.A[i, i-1] = -self.r / 2
-            self.A[i, i]   = 1 + self.r
-            self.A[i, i+1] = -self.r / 2
-
-            self.B[i, i-1] = self.r / 2
-            self.B[i, i]   = 1 - self.r
-            self.B[i, i+1] = self.r / 2
-
-        # Boundary sinistra (Dirichlet)
-        self.A[0, 0] = 1
-        self.B[0, :] = 0
-
-        # Boundary destra (Robin)
-        self.A[-1, -2] = -2 * self.r
-        self.A[-1, -1] = 1 + 2 * self.r * (1 + self.h * self.dx)
-
-        self.B[-1, -2] = 2 * self.r
-        self.B[-1, -1] = 1 - 2 * self.r * (1 + self.h * self.dx)
-
-    def solve(self, f):
-        T = np.zeros((self.nx, self.nt))
-
-        if(np.size(f) != self.nt):
-            print("ERORR: Size of f must be the same as nt")
-            return 0
-
-        # Condizione iniziale
-        T[:, 0] = 0
-
-        # Boundary sinistro
-        T[0, 0] = f[0]
-
-        for n in range(1, self.nt):
-            # Compute B*Theta
-            b = self.B @ T[:, n-1]
-            # Summ the vector b
-            # b[0] = (f[n] + f[n-1])/2
-            b[0] = f[n]
-        
-            T[:, n] = lu_solve((self.lu, self.piv), b)
-
-        return T
-    '''
+    
     def _build_matrices(self):
         
         n = self.nx - 1
@@ -153,6 +104,9 @@ class Heat1DCrankNicolson:
 
         return response
     
+    def diffusion_time(self) -> tuple:
+        tau = self.L**2/self.D
+        return tau, int(tau / self.dt)
     
     def info(self):
         print_section(f"Solver info")
