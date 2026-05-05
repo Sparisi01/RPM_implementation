@@ -126,7 +126,7 @@ class Heat1DCrankNicolson:
     
     def solve_from_impulse_response(self, f, impulse_response):
         
-        n = (2*self.nt - 1) 
+        n = (2*self.nt - 1)
         
         f_trap = np.empty_like(f)
         f_trap[:-1] = (f[:-1] + f[1:]) / 2
@@ -161,4 +161,3 @@ class Heat1DCrankNicolson:
         print_kv(f"nx:              ", f"{self.nx:.0f}")
         print_kv(f"r:               ", f"{self.r:.2e}")
         print_kv(f"h:               ", f"{self.h:.2e}")
-        
