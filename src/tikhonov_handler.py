@@ -7,9 +7,10 @@ from scipy.optimize import minimize
 
 class TikhonovHandler:
     
-    def __init__(self, solver: Heat1DCrankNicolson ):
+    def __init__(self, solver: Heat1DCrankNicolson, lambda_reg: float = 1e-3):
         self.solver = solver
-        self.W = None
+        self.lambda_reg = lambda_reg
+        self.W = self._build_W(lambda_reg)
     
     def _tikhonov_loss_impulse(self, f: np.ndarray, g_target: np.ndarray, impulse_response: np.ndarray, lambda_reg : float = 1e-3) -> double:
 
@@ -30,6 +31,17 @@ class TikhonovHandler:
 
         return misfit + derivate_regularizion
 
+    def _build_W(self, lambda_reg: float = 1e-3):
+        n = (2*self.solver.nt - 1)
+        
+        impulse_response = self.solver.impulse_response()[-1]
+        H = np.fft.rfft(impulse_response, n)
+    
+        omegas = np.fft.rfftfreq(n, d=self.solver.dt) * 2 * np.pi
+        
+        # Operator Solution to the Tickonov minimization problem
+        self.W = np.conjugate(H) / (np.abs(H)**2 + lambda_reg*omegas**2)
+            
     def regularize_impulse_response(self, g_target:  np.ndarray, lambda_reg: float = 1e-3, maxiter: int = 100, rnd_start_guess_amplitude: float = 0.01) -> np.ndarray:
         
         f_guess = np.random.randn(self.solver.nt) * rnd_start_guess_amplitude
@@ -61,19 +73,13 @@ class TikhonovHandler:
 
         return result.x
     
-    def regularize_closed_form(self, g_target: np.ndarray, lambda_reg: float = 1e-3, eps: float = 1e-6) -> np.ndarray:
+    def regularize_closed_form(self, g_target: np.ndarray, lambda_reg: float = 1e-3) -> np.ndarray:
         
         n = (2*self.solver.nt - 1)
 
-        if self.W is None:
-            
-            impulse_response = self.solver.impulse_response()[-1]
-            H = np.fft.rfft(impulse_response, n)
-        
-            omegas = np.fft.rfftfreq(n, d=self.solver.dt) * 2 * np.pi
-            
-            # Operator Solution to the Tickonov minimization problem
-            self.W = np.conjugate(H) / (np.abs(H)**2 + lambda_reg*omegas**2 + eps)
+        if lambda_reg != self.lambda_reg:
+            self.lambda_reg = lambda_reg
+            self._build_W(lambda_reg)
         
         g_trap = np.empty_like(g_target)
         g_trap[:-1] = (g_target[:-1] + g_target[1:]) / 2
