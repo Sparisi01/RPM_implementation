@@ -1,6 +1,5 @@
 # print_utils.py>
 
-
 def print_section(title, width=70, char='-'):
     print(f"\n{title.center(width, char)}\n")
     
