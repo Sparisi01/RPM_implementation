@@ -79,7 +79,6 @@ class Heat1DCrankNicolson:
         return T
     
     def solve_from_impulse_response(self, f, impulse_response):
-        
         n = (2*self.nt - 1)
         
         f_trap = np.empty_like(f)
@@ -93,6 +92,7 @@ class Heat1DCrankNicolson:
             raise ValueError("Frequency-domain shapes do not match")
     
         return np.fft.irfft(F * H,n)[:self.nt] * self.dt   
+        
     
     def impulse_response(self):
 
