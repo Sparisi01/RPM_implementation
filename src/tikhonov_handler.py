@@ -10,26 +10,20 @@ class TikhonovHandler:
     def __init__(self, solver: Heat1DCrankNicolson, lambda_reg: float = 1e-3):
         self.solver = solver
         self.lambda_reg = lambda_reg
-        self.W = self._build_W(lambda_reg)
+        self._build_W(lambda_reg)
     
+    def _compute_loss(self, f: np.ndarray, g_sim: np.ndarray, g_target: np.ndarray, lambda_reg: float = 1e-3) -> double :
+        misfit = np.linalg.norm(g_sim - g_target)**2
+        derivate_regularizion = lambda_reg * np.linalg.norm(np.diff(f))**2
+        return misfit + derivate_regularizion
+        
     def _tikhonov_loss_impulse(self, f: np.ndarray, g_target: np.ndarray, impulse_response: np.ndarray, lambda_reg : float = 1e-3) -> double:
-
         g_sim = self.solver.solve_from_impulse_response(f,impulse_response)
-        
-        misfit = np.linalg.norm(g_sim - g_target)**2
-        derivate_regularizion = lambda_reg * np.linalg.norm(np.diff(f))**2
+        return self._compute_loss(f, g_sim, g_target, lambda_reg)
 
-        return misfit + derivate_regularizion
-
-    def _tikhonov_loss(self, f: np.ndarray, g_target: np.ndarray, lambda_reg : float = 1e-3) -> double:
-        
-        T = self.solver.solve(f)
-        g_sim = T[-1, :]
-        
-        misfit = np.linalg.norm(g_sim - g_target)**2
-        derivate_regularizion = lambda_reg * np.linalg.norm(np.diff(f))**2
-
-        return misfit + derivate_regularizion
+    def _tikhonov_loss(self, f: np.ndarray, g_target: np.ndarray, lambda_reg: float = 1e-3) -> double:
+        g_sim = self.solver.solve(f)[-1, :]
+        return self._compute_loss(f, g_sim, g_target, lambda_reg)
 
     def _build_W(self, lambda_reg: float = 1e-3):
         n = (2*self.solver.nt - 1)
@@ -73,6 +67,18 @@ class TikhonovHandler:
 
         return result.x
     
+    def regularize(self, g_target: np.ndarray, lambda_reg: float = 1e-3, regularization_type = "closed", maxiter: int = 100, rnd_start_guess_amplitude: float = 0.01) -> np.ndarray:
+        
+        if regularization_type == "closed":
+            return self.regularize_closed_form(g_target, lambda_reg)
+        elif regularization_type == "nicholson":
+            return self.regularize_nicholson(g_target, lambda_reg, maxiter, rnd_start_guess_amplitude)
+        elif regularization_type == "impulse":
+            return self.regularize_impulse_response(g_target, lambda_reg, maxiter, rnd_start_guess_amplitude)
+        else:
+            raise ValueError("Invalid regularization_type")
+    
+        
     def regularize_closed_form(self, g_target: np.ndarray, lambda_reg: float = 1e-3) -> np.ndarray:
         
         n = (2*self.solver.nt - 1)

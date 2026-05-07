@@ -24,6 +24,7 @@ class Heat1DCrankNicolson:
         self.x_array = np.linspace(0, L, self.nx)
         self.t_array = np.linspace(0, Tf, nt)
 
+        self.tau = self.L * self.L / self.D
         self._build_matrices()
     
     def _build_matrices(self):
@@ -105,12 +106,11 @@ class Heat1DCrankNicolson:
         return response
     
     def diffusion_time(self) -> tuple:
-        tau = self.L**2/self.D
-        return tau, int(tau / self.dt)
+        return self.tau, int(self.tau / self.dt)
     
     def info(self):
         print_section(f"Solver info")
-        print_kv(f"Time scale coeff:", f"{self.L * self.L / self.D:.2e}")
+        print_kv(f"Diffusion time:", f"{self.tau:.2e}")
         print_kv(f"dx:              ", f"{self.dx:.2e}")
         print_kv(f"dt:              ", f"{self.dt:.2e}")
         print_kv(f"nt:              ", f"{self.nt:.0f}")
