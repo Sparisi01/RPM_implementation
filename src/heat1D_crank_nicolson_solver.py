@@ -79,6 +79,7 @@ class Heat1DCrankNicolson:
         return T
     
     def solve_from_impulse_response(self, f, impulse_response):
+        
         n = (2*self.nt - 1)
         
         f_trap = np.empty_like(f)
