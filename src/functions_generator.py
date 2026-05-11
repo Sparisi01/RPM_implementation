@@ -27,7 +27,10 @@ class FunctionsGenerator:
         sqdist = (x1[:, None] - x2[None, :])**2
         return (self.sigma**2)*np.exp(-sqdist / (2 * self.l**2))
     
-    def generate_from_white_noise(self) -> np.ndarray:
+    def generate_from_white_noise(self, seed = None) -> np.ndarray:
+        
+        if seed is not None:
+            np.random.seed(seed=seed)
         
         # Sample white noise and compute its FFT 
         f = np.random.normal(0, 1, self.nt)
@@ -43,8 +46,11 @@ class FunctionsGenerator:
         f_filtered = np.fft.irfft(f_hat_filtered, n=self.nt)
         return f_filtered
 
-    def generate_from_Gaussian_Process(self) -> np.ndarray:
+    def generate_from_Gaussian_Process(self, seed = None) -> np.ndarray:
         
+        if seed is not None:
+            np.random.seed(seed=seed)
+            
         if self.K is None: 
             self.compute_covariance_matrix()
         
