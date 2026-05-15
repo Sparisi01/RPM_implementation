@@ -62,10 +62,10 @@ class TikhonovHandler:
         return np.conjugate(H) / (np.abs(H)**2 + lambda_reg*D2 + eps)
             
     def regularize_impulse(
-        self, 
-        g_target:  np.ndarray, 
-        lambda_reg: float = 1e-3, 
-        maxiter: int = 100, 
+        self,
+        g_target:  np.ndarray,
+        lambda_reg: float = 1e-3,
+        maxiter: int = 100,
         rnd_start_guess_amplitude: float = 0.01
         ) -> np.ndarray:
         
