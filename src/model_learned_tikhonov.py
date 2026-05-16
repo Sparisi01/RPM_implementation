@@ -1,8 +1,9 @@
-# learned_tikhonov.py>
+# model_learned_tikhonov.py>
 
 import numpy as np
 import torch
 import torch.nn as nn
+
 
 class LearnedTikhonov(nn.Module):
     """
