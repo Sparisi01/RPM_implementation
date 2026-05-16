@@ -145,3 +145,41 @@ class TikhonovHandler:
             return self.regularize_standard(g_target, lambda_reg, maxiter, rnd_start_guess_amplitude)
         elif regularization_type_ == "mixed":
             raise NotImplementedError("mixed regularization not implemented")
+        
+
+import matplotlib.pyplot as plt
+
+def reconstruction_error_plot(f,g,f_rec, t_array, n_cut = None):
+    
+    nt = np.size(t_array)
+    
+    if n_cut is None or n_cut == 0:
+        n_cut = 1
+    
+    fig, axes = plt.subplots(2,1, figsize=(4.4,4.4)) 
+    ax1, ax2 = axes
+    
+    ax1.plot(t_array, f, label=r"$f(t)$", lw=5, alpha=0.6)
+    ax1.plot(t_array, f_rec, label=r"Reconstructed $\hat{f}(t)$", c="r")
+    ax1.plot(t_array, g, label=r"$\hat{g}(t)$", c="k")
+    ax1.set_xlabel(r"$t$")
+    ax1.set_ylabel("Temperature")
+    ax1.set_title(r"Real $f(t)$ vs Reconstructed $\hat{f}(t)$")
+    ax1.grid()
+    # ax1.ylim([np.min(f_reconstructed[:-n_eff])*1.2, np.max(f_reconstructed[:-n_eff])*1.2])
+    ax1.legend()
+    ax1.minorticks_on()
+    
+    loss_array = np.zeros(nt)
+
+    for n in range(nt):
+        loss_array[n] = np.linalg.norm(f[0:n] - f_rec[0:n])**2
+
+    ax2.plot(t_array[:-n_cut], loss_array[:-n_cut], label="Cumulative error")
+    ax2.set_ylabel(r"$||\hat{f} - f||^2, \hspace{1em} t \in [0,t_f)$")
+    ax2.set_xlabel(r"Cumulate time $t_f$")
+    ax2.set_title(r"Cumulative reconstruction error as a function of $t_f$")
+    ax2.legend()
+    ax2.grid()
+    
+    return loss_array, fig, axes
