@@ -1,9 +1,11 @@
 # tikhonov_handler.py>
 
 import numpy as np
+from src.print_utils import print_kv
 from src.heat1D_crank_nicolson_solver import Heat1DCrankNicolson
 from scipy.optimize import minimize
 from typing import Literal, get_args
+import matplotlib.pyplot as plt
 
 _TYPES = Literal["closed", "fft", "solver", "mixed"]
 
@@ -53,13 +55,12 @@ class TikhonovHandler:
     
         omegas = np.fft.rfftfreq(n, d=self.solver.dt) * 2 * np.pi
         
-        D2 = np.abs(1 - np.exp(-1j * omegas * self.solver.dt))**2
-        
-        #return np.conjugate(H) / (np.abs(H)**2 + lambda_reg*omegas**2)
-        
-        eps = 1e-14
-        
-        return np.conjugate(H) / (np.abs(H)**2 + lambda_reg*D2 + eps)
+        # Aggiungi un floor proporzionale al massimo di |H|^2 per evitare
+        # divisioni per zero anche a basse frequenze
+        H_power = np.abs(H)**2
+        eps = 1e-6 * np.max(H_power)
+    
+        return np.conjugate(H) / (np.abs(H)**2 + lambda_reg*omegas**2 + eps)
             
     def regularize_impulse(
         self,
@@ -146,8 +147,63 @@ class TikhonovHandler:
         elif regularization_type_ == "mixed":
             raise NotImplementedError("mixed regularization not implemented")
         
+    def lcurve(
+        self,
+        g_target: np.ndarray,
+        lambdas: np.ndarray | None = None
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Compute the L-curve: misfit vs norm of the solution
+        varying lambda_reg.
+        """
+        if lambdas is None:
+            lambdas = np.logspace(-6, 1, 60)
 
-import matplotlib.pyplot as plt
+        misfits = []
+        norms = []
+
+        impulse_response = self.solver.impulse_response()[-1]
+
+        for lam in lambdas:
+            f_rec = self.regularize_closed_form(g_target, lambda_reg=lam)
+            g_sim = self.solver.solve_from_impulse_response(f_rec, impulse_response)
+            misfits.append(np.linalg.norm(g_sim - g_target)**2)
+            norms.append(np.linalg.norm(np.diff(f_rec))**2)
+
+        return lambdas, np.array(misfits), np.array(norms)
+    
+    def best_lambda(self,
+        g_target: np.ndarray,
+        lambdas: np.ndarray | None = None,
+        verbose: bool = False
+    ) -> float: 
+        """
+        Compute the best lambda from the L-curve given a g_target
+        """
+        laambdas, missfit, norms = self.lcurve(g_target, lambdas=lambdas)
+
+        log_m = np.log(missfit)
+        log_n = np.log(norms)
+
+        dm = np.gradient(log_m)
+        dn = np.gradient(log_n)
+        d2m = np.gradient(dm)
+        d2n = np.gradient(dn)
+
+        curvature = np.abs(dm * d2n - dn * d2m) / (dm**2 + dn**2)**1.5
+        best_lambda = laambdas[np.argmax(curvature)]
+        
+        if verbose:
+            print_kv(r"$||g||^2$",f"{np.linalg.norm(g_target)**2:.3e}")
+            print_kv(r"$||Dg||^2$",f"{np.linalg.norm(np.diff(g_target))**2:.3e}")
+            print_kv(r"$\lambda ottimo$",f"{best_lambda:.3e}")
+            print_kv(r'$\lambda \ ||g||^2$',f"{best_lambda / np.linalg.norm(g_target)**2:.3e}")
+            
+            plt.plot(log_m,log_n)
+            plt.show()
+        
+        return best_lambda
+    
 
 def reconstruction_error_plot(f,g,f_rec, t_array, n_cut = None):
     
