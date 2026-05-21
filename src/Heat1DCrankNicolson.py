@@ -7,6 +7,7 @@ from src.print_utils import print_kv, print_section
 class Heat1DCrankNicolson:
 
     def __init__(self, L, Tf, nt, D, h, wanted_r = 0.5):
+    
         self.L = L
         self.Tf = Tf
         self.nt = nt
@@ -28,7 +29,7 @@ class Heat1DCrankNicolson:
         self._build_matrices()
     
     def _build_matrices(self):
-        
+
         n = self.nx - 1
         
         self.A = np.zeros((n, n))
