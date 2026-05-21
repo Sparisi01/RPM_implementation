@@ -1,0 +1,159 @@
+import torch
+import torch.nn as nn
+import numpy as np
+
+class BandedSigma(nn.Module):
+    def __init__(self, nk:int, M=0):
+        """
+        N: numero di frequenze
+        M: numero di diagonali sopra/sotto la principale (0 = solo diagonale)
+        """
+        super().__init__()
+        self.nk = nk
+        self.M = M
+        
+        # Parametri per ogni diagonale m = -M, ..., 0, ..., M
+        # Per hermitianità: sigma_{-m} = conj(sigma_m)
+        # Quindi parametrizziamo solo m = 0, 1, ..., M
+        
+        # Diagonale principale: reale (per simmetria Sigma(w) = Sigma(-w))
+        self.diag_0 = nn.Parameter(torch.zeros(nk))
+        
+        # Sottodiagonali: complesse, ma con vincolo hermitiano
+        # Parametrizziamo parte reale e immaginaria separatamente
+        if M > 0:
+            self.diag_re = nn.Parameter(torch.zeros(M, nk))  # parte reale
+            self.diag_im = nn.Parameter(torch.zeros(M, nk))  # parte immaginaria
+
+        # Inizializzazione delle diagonali di Sigma
+        nn.init.normal_(self.diag_0, mean=0.0, std=0.01)
+        if M > 0:
+            nn.init.normal_(self.diag_re, mean=0.0, std=0.01)
+            nn.init.normal_(self.diag_im, mean=0.0, std=0.01)
+    
+    def build_matrix(self):
+        nk, M = self.nk, self.M
+        
+        # Scala i valori della diagonale in (-1, 1) usando la tangente iperbolica
+        d0 = torch.tanh(self.diag_0)
+        Sigma = torch.diag(d0.to(torch.complex64))
+        
+        for m in range(1, M + 1):
+            d = torch.complex(self.diag_re[m-1], self.diag_im[m-1])
+            # sopra la diagonale: sigma_m
+            idx = torch.arange(nk - m)
+            Sigma[idx, idx + m] += d[:nk-m]
+            # sotto la diagonale: conj(sigma_m) per hermitianità
+            Sigma[idx + m, idx] += d[:nk-m].conj()
+        
+        return Sigma
+    
+    def increase_bandwidth(model, new_M):
+        """Aumenta M preservando i parametri già appresi"""
+        old_M = model.sigma.M
+        new_sigma = BandedSigma(model.sigma.N, new_M)
+        
+        # Copia parametri esistenti
+        with torch.no_grad():
+            new_sigma.diag_0.copy_(model.sigma.diag_0)
+            if old_M > 0:
+                new_sigma.diag_re[:old_M].copy_(model.sigma.diag_re)
+                new_sigma.diag_im[:old_M].copy_(model.sigma.diag_im)
+            # Nuove diagonali inizializzate a zero
+        
+        model.sigma = new_sigma
+        return model
+
+    def forward(self, g_hat):
+        """g_hat: vettore complesso di N frequenze"""
+        return  g_hat @ self.build_matrix()
+    
+    @torch.no_grad()
+    def get_Sigma(self) -> np.ndarray:
+        return self.build_matrix().cpu().numpy()
+    
+class InverseHeatModel(nn.Module):
+    
+    def __init__(self, 
+                H:np.ndarray,   # Impulse response 
+                nt: int,        # Number of time steps
+                dt: float,      # Time step interval
+                M: int=0,       # Number of off diagonals in Sigma
+                ):
+        
+        super().__init__()
+        
+        
+        self.nt = nt
+        self.n  = int(2 * self.nt - 1)
+        self.dt = dt
+        self.n_even = (self.n % 2 == 0)
+        
+        self.nk = len(H) 
+
+        self.sigma = BandedSigma(self.nk, M)                    # (nk, M) float32
+
+        H_t = torch.from_numpy(H.astype(np.complex64))
+        self.register_buffer("H_abs2", H_t.abs().pow(2))        # float32
+        self.register_buffer("H_conj", H_t.conj())              # complex64
+
+        self.phi_raw = nn.Parameter(torch.zeros(self.nk))
+        self.log_R   = nn.Parameter(torch.full((self.nk,), np.log(1e-2)))
+    
+    def _get_phi(self) -> torch.Tensor:
+        """phi[0]=0 (DC). If n even phi[-1]=0 (Nyquist)"""
+        phi = self.phi_raw.clone()
+        phi[0] = 0.0
+        if self.n_even:
+            phi[-1] = 0.0
+        return phi                                              # (nk,) float32
+
+    def _get_R(self) -> torch.Tensor:
+        return torch.exp(self.log_R)                            # (nk,) float32, always > 0
+    
+    def _build_W(self) -> torch.Tensor:
+        """Costruisce il filtro W (nk,) complex64."""
+        
+        phi = self._get_phi()
+        R   = self._get_R()
+        
+        # torch.polar: device-safe
+        exp_i_phi = torch.polar(torch.ones_like(phi), phi)      # (nk,) complex64
+        
+        return self.H_conj * exp_i_phi / (self.H_abs2 + R + 1e-12)
+    
+    def forward(self, g : torch.Tensor, g_prev : torch.Tensor) -> torch.Tensor:
+        
+        # Trapezoidal integration correction
+        g_trap              = g.clone()
+        g_trap[:, :-1]      = (g[:, :-1] + g[:, 1:]) / 2.0
+        g_trap[:,  -1]      = g[:, -1] / 2.0
+
+        # Trapezoidal integration correction
+        g_trap_prev         = g_prev.clone()
+        g_trap_prev[:, :-1] = (g_prev[:, :-1] + g_prev[:, 1:]) / 2.0
+        g_trap_prev[:,  -1] = g_prev[:, -1] / 2.0
+
+        # Correzione IC dalla finestra precedente
+        G_prev              = torch.fft.rfft(g_prev, n=self.n, dim=1)                       # (N, nk)
+        G_correction        = self.sigma(G_prev)                                            # (N, nk)
+        
+        G                   = torch.fft.rfft(g_trap, n=self.n, dim=1)                       # (N, nk)
+        W                   = self._build_W()  
+        
+        F_pred              = W.unsqueeze(0) * (G-G_correction)                             # (N, nk)
+        f_pred              = torch.fft.irfft(F_pred, n=self.n, dim=1)[:, :self.nt]
+        
+        return f_pred / self.dt
+    
+    @torch.no_grad()
+    def get_phi(self) -> np.ndarray:
+        return self._get_phi().cpu().numpy()
+
+    @torch.no_grad()
+    def get_R(self) -> np.ndarray:
+        return self._get_R().cpu().numpy()
+
+    @torch.no_grad()
+    def get_W_magnitude(self) -> np.ndarray:
+        return self._build_W().abs().cpu().numpy()
