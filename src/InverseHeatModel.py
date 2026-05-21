@@ -83,14 +83,13 @@ class InverseHeatModel(nn.Module):
         
         super().__init__()
         
-        
         self.nt = nt
+        self.nk = len(H) 
         self.n  = int(2 * self.nt - 1)
+        
         self.dt = dt
         self.n_even = (self.n % 2 == 0)
         
-        self.nk = len(H) 
-
         self.sigma = BandedSigma(self.nk, M)                    # (nk, M) float32
 
         H_t = torch.from_numpy(H.astype(np.complex64))

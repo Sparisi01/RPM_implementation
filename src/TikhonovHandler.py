@@ -2,7 +2,7 @@
 
 import numpy as np
 from src.print_utils import print_kv
-from src.heat1D_crank_nicolson_solver import Heat1DCrankNicolson
+from src.Heat1DCrankNicolson import Heat1DCrankNicolson
 from scipy.optimize import minimize
 from typing import Literal, get_args
 import matplotlib.pyplot as plt
