@@ -31,7 +31,11 @@ class BandedSigma(nn.Module):
             nn.init.normal_(self.diag_re, mean=0.0, std=0.01)
             nn.init.normal_(self.diag_im, mean=0.0, std=0.01)
     
-    def build_matrix(self):
+    def forward(self, g_hat):
+        """g_hat: vettore complesso di N frequenze"""
+        return  g_hat @ self._build_Sigma()
+    
+    def _build_Sigma(self):
         nk, M = self.nk, self.M
         
         # Scala i valori della diagonale in (-1, 1) usando la tangente iperbolica
@@ -48,30 +52,51 @@ class BandedSigma(nn.Module):
         
         return Sigma
     
+    @staticmethod
     def increase_bandwidth(model, new_M):
         """Aumenta M preservando i parametri già appresi"""
-        old_M = model.sigma.M
-        new_sigma = BandedSigma(model.sigma.N, new_M)
+        
+        old_sigma = model.sigma
+        old_M = old_sigma.M
+        device = old_sigma.diag_0.device
+        
+        new_sigma = BandedSigma(old_sigma.nk, new_M).to(device)
         
         # Copia parametri esistenti
         with torch.no_grad():
-            new_sigma.diag_0.copy_(model.sigma.diag_0)
+            new_sigma.diag_0.copy_(old_sigma.diag_0)
             if old_M > 0:
-                new_sigma.diag_re[:old_M].copy_(model.sigma.diag_re)
-                new_sigma.diag_im[:old_M].copy_(model.sigma.diag_im)
+                new_sigma.diag_re[:old_M].copy_(old_sigma.diag_re)
+                new_sigma.diag_im[:old_M].copy_(old_sigma.diag_im)
             # Nuove diagonali inizializzate a zero
         
         model.sigma = new_sigma
         return model
-
-    def forward(self, g_hat):
-        """g_hat: vettore complesso di N frequenze"""
-        return  g_hat @ self.build_matrix()
+    
+    # ==========================================================
+    # Utilities Get Parameters
+    # ==========================================================
     
     @torch.no_grad()
     def get_Sigma(self) -> np.ndarray:
-        return self.build_matrix().cpu().numpy()
+        return self._build_Sigma().cpu().numpy()
     
+    # ==========================================================
+    # Utilities freeze / unfreeze
+    # ==========================================================
+    
+    def freeze_sigma(self):
+        self.diag_0.requires_grad_(False)
+        if self.M > 0:
+            self.diag_re.requires_grad_(False)
+            self.diag_im.requires_grad_(False)
+
+    def unfreeze_sigma(self):
+        self.diag_0.requires_grad_(True)
+        if self.M > 0:
+            self.diag_re.requires_grad_(True)
+            self.diag_im.requires_grad_(True)
+            
 class InverseHeatModel(nn.Module):
     
     def __init__(self, 
@@ -99,28 +124,6 @@ class InverseHeatModel(nn.Module):
         self.phi_raw = nn.Parameter(torch.zeros(self.nk))
         self.log_R   = nn.Parameter(torch.full((self.nk,), np.log(1e-2)))
     
-    def _get_phi(self) -> torch.Tensor:
-        """phi[0]=0 (DC). If n even phi[-1]=0 (Nyquist)"""
-        phi = self.phi_raw.clone()
-        phi[0] = 0.0
-        if self.n_even:
-            phi[-1] = 0.0
-        return phi                                              # (nk,) float32
-
-    def _get_R(self) -> torch.Tensor:
-        return torch.exp(self.log_R)                            # (nk,) float32, always > 0
-    
-    def _build_W(self) -> torch.Tensor:
-        """Costruisce il filtro W (nk,) complex64."""
-        
-        phi = self._get_phi()
-        R   = self._get_R()
-        
-        # torch.polar: device-safe
-        exp_i_phi = torch.polar(torch.ones_like(phi), phi)      # (nk,) complex64
-        
-        return self.H_conj * exp_i_phi / (self.H_abs2 + R + 1e-12)
-    
     def forward(self, g : torch.Tensor, g_prev : torch.Tensor) -> torch.Tensor:
         
         # Trapezoidal integration correction
@@ -145,6 +148,32 @@ class InverseHeatModel(nn.Module):
         
         return f_pred / self.dt
     
+    def _get_phi(self) -> torch.Tensor:
+        """phi[0]=0 (DC). If n even phi[-1]=0 (Nyquist)"""
+        phi = self.phi_raw.clone()
+        phi[0] = 0.0
+        if self.n_even:
+            phi[-1] = 0.0
+        return phi                                              # (nk,) float32
+
+    def _get_R(self) -> torch.Tensor:
+        return torch.exp(self.log_R)                            # (nk,) float32, always > 0
+    
+    def _build_W(self) -> torch.Tensor:
+        """Costruisce il filtro W (nk,) complex64."""
+        
+        phi = self._get_phi()
+        R   = self._get_R()
+        
+        # torch.polar: device-safe
+        exp_i_phi = torch.polar(torch.ones_like(phi), phi)      # (nk,) complex64
+        
+        return self.H_conj * exp_i_phi / (self.H_abs2 + R + 1e-12)
+    
+    # ==========================================================
+    # Utilities Get Parameters
+    # ==========================================================
+    
     @torch.no_grad()
     def get_phi(self) -> np.ndarray:
         return self._get_phi().cpu().numpy()
@@ -156,3 +185,35 @@ class InverseHeatModel(nn.Module):
     @torch.no_grad()
     def get_W_magnitude(self) -> np.ndarray:
         return self._build_W().abs().cpu().numpy()
+    
+    # ==========================================================
+    # Utilities freeze / unfreeze
+    # ==========================================================
+    
+    def freeze_phi(self):
+        self.phi_raw.requires_grad_(False)
+
+    def unfreeze_phi(self):
+        self.phi_raw.requires_grad_(True)
+
+    def freeze_R(self):
+        self.log_R.requires_grad_(False)
+
+    def unfreeze_R(self):
+        self.log_R.requires_grad_(True)
+        
+    def freeze_sigma(self):
+        for p in self.sigma.parameters():
+            p.requires_grad_(False)
+
+    def unfreeze_sigma(self):
+        for p in self.sigma.parameters():
+            p.requires_grad_(True)
+            
+    def freeze_all(self):
+        for p in self.parameters():
+            p.requires_grad_(False)
+
+    def unfreeze_all(self):
+        for p in self.parameters():
+            p.requires_grad_(True)
