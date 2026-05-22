@@ -5,37 +5,78 @@ import numpy as np
 class BandedSigma(nn.Module):
     def __init__(self, nk:int, M=0):
         """
-        N: numero di frequenze
-        M: numero di diagonali sopra/sotto la principale (0 = solo diagonale)
+        Hermitian banded operator in the frequency domain.
+
+        The matrix Sigma is parameterized through its diagonals up to
+        bandwidth `M`, enforcing Hermitian symmetry:
+
+            Sigma[i, j] = conj(Sigma[j, i])
+
+        Only the main diagonal and the upper diagonals are explicitly
+        learned. Lower diagonals are obtained by complex conjugation.
+
+        Args:
+            nk (int):
+                Number of frequencies.
+
+            M (int, optional):
+                Number of upper/lower off-diagonals.
+                - `M = 0` corresponds to a purely diagonal operator.
+                - `M > 0` enables frequency coupling.
+
+        Attributes:
+            nk (int):
+                Number of frequencies.
+
+            M (int):
+                Bandwidth of the operator.
+
+            diag_0 (nn.Parameter):
+                Real-valued main diagonal.
+
+            diag_re (nn.Parameter):
+                Real part of upper diagonals with shape (M, nk).
+
+            diag_im (nn.Parameter):
+                Imaginary part of upper diagonals with shape (M, nk).
         """
+        
         super().__init__()
         self.nk = nk
         self.M = M
         
-        # Parametri per ogni diagonale m = -M, ..., 0, ..., M
-        # Per hermitianità: sigma_{-m} = conj(sigma_m)
-        # Quindi parametrizziamo solo m = 0, 1, ..., M
-        
         # Diagonale principale: reale (per simmetria Sigma(w) = Sigma(-w))
         self.diag_0 = nn.Parameter(torch.zeros(nk))
         
-        # Sottodiagonali: complesse, ma con vincolo hermitiano
-        # Parametrizziamo parte reale e immaginaria separatamente
         if M > 0:
             self.diag_re = nn.Parameter(torch.zeros(M, nk))  # parte reale
             self.diag_im = nn.Parameter(torch.zeros(M, nk))  # parte immaginaria
 
-        # Inizializzazione delle diagonali di Sigma
-        nn.init.normal_(self.diag_0, mean=0.0, std=0.01)
-        if M > 0:
-            nn.init.normal_(self.diag_re, mean=0.0, std=0.01)
-            nn.init.normal_(self.diag_im, mean=0.0, std=0.01)
+        #nn.init.normal_(self.diag_0, mean=0.0, std=0.01)
+        #if M > 0:
+        #    nn.init.normal_(self.diag_re, mean=0.0, std=0.01)
+        #    nn.init.normal_(self.diag_im, mean=0.0, std=0.01)
     
-    def forward(self, g_hat):
-        """g_hat: vettore complesso di N frequenze"""
-        return  g_hat @ self._build_Sigma()
+    def forward(self, G_prev):
+        """
+        Args:
+            g_hat (torch.Tensor): 
+                Input signal from the previous windows of size (n_samples, nk)
+        """
+        return  G_prev @ self._build_Sigma()
     
     def _build_Sigma(self):
+        """
+        Construct the Hermitian banded matrix Sigma.
+
+        The main diagonal is constrained to (-1, 1)
+        through a hyperbolic tangent nonlinearity.
+
+        Returns:
+            torch.Tensor:
+                Complex Hermitian matrix with shape (nk, nk).
+        """
+        
         nk, M = self.nk, self.M
         
         # Scala i valori della diagonale in (-1, 1) usando la tangente iperbolica
@@ -54,7 +95,24 @@ class BandedSigma(nn.Module):
     
     @staticmethod
     def increase_bandwidth(model, new_M):
-        """Aumenta M preservando i parametri già appresi"""
+        """
+        Increase the bandwidth of the operator while preserving
+        previously learned parameters.
+
+        Existing diagonals are copied into the new operator,
+        while newly introduced diagonals are initialized to zero.
+
+        Args:
+            model:
+                Model containing a `sigma` attribute of type
+                `BandedSigma`.
+
+            new_M (int):
+                New bandwidth value.
+
+        Returns:
+            The updated model.
+        """
         
         old_sigma = model.sigma
         old_M = old_sigma.M
