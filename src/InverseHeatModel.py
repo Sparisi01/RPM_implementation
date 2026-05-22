@@ -96,7 +96,27 @@ class BandedSigma(nn.Module):
         if self.M > 0:
             self.diag_re.requires_grad_(True)
             self.diag_im.requires_grad_(True)
-            
+    
+    # ==========================================================
+    # Utilities printing informations
+    # ==========================================================
+    
+    def __repr__(self):
+        nparams = sum(p.numel() for p in self.parameters())
+        trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+        return (
+            f"{self.__class__.__name__}(\n"
+            f"  nk={self.nk},\n"
+            f"  M={self.M},\n"
+            f"  parameters={nparams:,},\n"
+            f"  trainable={trainable:,}\n"
+            f")"
+        )
+
+    def __str__(self):
+        return self.__repr__()
+    
 class InverseHeatModel(nn.Module):
     
     def __init__(self, 
@@ -217,3 +237,31 @@ class InverseHeatModel(nn.Module):
     def unfreeze_all(self):
         for p in self.parameters():
             p.requires_grad_(True)
+    
+    # ==========================================================
+    # Utilities printing informations
+    # ==========================================================
+    
+    def __repr__(self):
+        total_params = sum(p.numel() for p in self.parameters())
+        trainable_params = sum(
+            p.numel() for p in self.parameters() if p.requires_grad
+        )
+
+        sigma_params = sum(p.numel() for p in self.sigma.parameters())
+
+        return (
+            f"{self.__class__.__name__}(\n"
+            f"  nt                      =   {self.nt},\n"
+            f"  nk                      =   {self.nk},\n"
+            f"  n                       =   {self.n},\n"
+            f"  dt                      =   {self.dt},\n"
+            f"  sigma_bandwidth         =   {self.sigma.M},\n"
+            f"  sigma_parameters        =   {sigma_params:,},\n"
+            f"  total_parameters        =   {total_params:,},\n"
+            f"  trainable_parameters    =   {trainable_params:,}\n"
+            f")"
+        )
+
+    def __str__(self):
+        return self.__repr__()
