@@ -36,10 +36,10 @@ class BandedSigma(nn.Module):
             diag_0 (nn.Parameter):
                 Real-valued main diagonal.
 
-            diag_re (nn.Parameter):
+            diag_re (nn.ParameterList):
                 Real part of upper diagonals with shape (M, nk).
 
-            diag_im (nn.Parameter):
+            diag_im (nn.ParameterList):
                 Imaginary part of upper diagonals with shape (M, nk).
         """
         
@@ -47,12 +47,15 @@ class BandedSigma(nn.Module):
         self.nk = nk
         self.M = M
         
-        # Diagonale principale: reale (per simmetria Sigma(w) = Sigma(-w))
-        self.diag_0 = nn.Parameter(torch.zeros(nk))
+        self.diag_0 = nn.Parameter(torch.zeros(nk))                 # (nk) real
         
         if M > 0:
-            self.diag_re = nn.Parameter(torch.zeros(M, nk))  # parte reale
-            self.diag_im = nn.Parameter(torch.zeros(M, nk))  # parte immaginaria
+            self.diag_re = nn.ParameterList(
+                [nn.Parameter(torch.zeros(nk)) for _ in range(M)]   # (M, nk) complex
+            )   
+            self.diag_im = nn.ParameterList(
+                [nn.Parameter(torch.zeros(nk)) for _ in range(M)]   # (M, nk) complex
+            )
     
     def forward(self, G_prev):
         """
@@ -76,16 +79,16 @@ class BandedSigma(nn.Module):
         
         nk, M = self.nk, self.M
         
-        # Scala i valori della diagonale in (-1, 1) usando la tangente iperbolica
+        # Scale values on diagonal in (-1, 1) using tanh
         d0 = torch.tanh(self.diag_0)
         Sigma = torch.diag(d0.to(torch.complex64))
         
         for m in range(1, M + 1):
             d = torch.complex(self.diag_re[m-1], self.diag_im[m-1])
-            # sopra la diagonale: sigma_m
+            # over the diagonal: sigma_m
             idx = torch.arange(nk - m)
             Sigma[idx, idx + m] += d[:nk-m]
-            # sotto la diagonale: conj(sigma_m) per hermitianità
+            # under diagonal: conj(sigma_m) for hermitianity
             Sigma[idx + m, idx] += d[:nk-m].conj()
         
         return Sigma
@@ -121,9 +124,9 @@ class BandedSigma(nn.Module):
         with torch.no_grad():
             new_sigma.diag_0.copy_(old_sigma.diag_0)
             if old_M > 0:
-                new_sigma.diag_re[:old_M].copy_(old_sigma.diag_re)
-                new_sigma.diag_im[:old_M].copy_(old_sigma.diag_im)
-            # Nuove diagonali inizializzate a zero
+                for m in range(old_M):
+                    new_sigma.diag_re[m].copy_(old_sigma.diag_re[m])
+                    new_sigma.diag_im[m].copy_(old_sigma.diag_im[m])
         
         model.sigma = new_sigma
         return model
@@ -146,100 +149,33 @@ class BandedSigma(nn.Module):
         if diagonal_index == 0:
             self.diag_0.requires_grad_(False)
         else:
-            self.diag_re[diagonal_index - 1, :].requires_grad_(False)
-            self.diag_im[diagonal_index - 1, :].requires_grad_(False)
-    
+            self.diag_re[diagonal_index - 1].requires_grad_(False)
+            self.diag_im[diagonal_index - 1].requires_grad_(False)
+
     def unfreeze_diagonal(self, diagonal_index: int):
         if diagonal_index < 0 or diagonal_index > self.M:
             raise ValueError(f"diagonal_index must be in [0, M={self.M}], got {diagonal_index}")
         if diagonal_index == 0:
             self.diag_0.requires_grad_(True)
         else:
-            self.diag_re[diagonal_index - 1, :].requires_grad_(True)
-            self.diag_im[diagonal_index - 1, :].requires_grad_(True)
-    
+            self.diag_re[diagonal_index - 1].requires_grad_(True)
+            self.diag_im[diagonal_index - 1].requires_grad_(True)
+        
     def freeze_sigma(self):
         self.diag_0.requires_grad_(False)
         if self.M > 0:
-            self.diag_re.requires_grad_(False)
-            self.diag_im.requires_grad_(False)
+            for p in self.diag_re:
+                p.requires_grad_(False)
+            for p in self.diag_im:
+                p.requires_grad_(False)
 
     def unfreeze_sigma(self):
         self.diag_0.requires_grad_(True)
         if self.M > 0:
-            self.diag_re.requires_grad_(True)
-            self.diag_im.requires_grad_(True)
-    
-    # ==========================================================
-    # Utilities printing informations
-    # ==========================================================
-    
-    def __repr__(self):
-        nparams = sum(p.numel() for p in self.parameters())
-        trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-        return (
-            f"{self.__class__.__name__}(\n"
-            f"  nk={self.nk},\n"
-            f"  M={self.M},\n"
-            f"  parameters={nparams:,},\n"
-            f"  trainable={trainable:,}\n"
-            f")"
-        )
-
-    def __str__(self):
-        return self.__repr__()
-    
-    def summary(self):
-        """
-        Stampa una panoramica strutturata di BandedSigma:
-        composizione della matrice e stato learnable di ogni diagonale.
-        """
-        nk, M = self.nk, self.M
-
-        print_line()
-        print_kv(f"BandedSigma",f"nk={nk}  M={M}")
-        print_line()
-
-        total_params     = sum(p.numel() for p in self.parameters())
-        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        frozen_params    = total_params - trainable_params
-
-        print_kv(f"Total Parameters",   f"{total_params:>8,}")
-        print_kv(f"Trainable",          f"{trainable_params:>8,}")
-        print_kv(f"Frozen",             f"{frozen_params:>8,}")
-        print_line()
-
-        # ── Diagonal ──────────────────────────────────────
-        d0_learn = self.diag_0.requires_grad
-        d0_icon  = "Learn" if d0_learn else "Frozen"
-        print_kv("Diagonal",d0_icon)
-
-        # ── Off diagonal ──────────────────────────────────
-        if M > 0:
-            for m in range(1, M + 1):
-                re = self.diag_re[m - 1]
-                im = self.diag_im[m - 1]
-
-                re_learn = re.requires_grad
-                im_learn = im.requires_grad
-                shape    = str(tuple(re.shape))
-
-                if re_learn and im_learn:
-                    status = "Learn"
-                elif not re_learn and not im_learn:
-                    status = "Frozen"
-
-                print_kv(f"m={m}",status)
-        
-        print_line()
-
-        n_elem_nonzero = nk + 2 * sum(nk - m for m in range(1, M + 1))
-        n_elem_total   = nk * nk
-        sparsity       = 1.0 - n_elem_nonzero / n_elem_total
-        print_kv(f"Non-zero elements ",f"{n_elem_nonzero:>8,}/{n_elem_total:,}")
-        print_kv(f"Sparsity",f"{sparsity:>7.1%}")
-        print_line()
+            for p in self.diag_re:
+                p.requires_grad_(True)
+            for p in self.diag_im:
+                p.requires_grad_(True)   
     
 class InverseHeatModel(nn.Module):
     
@@ -259,7 +195,7 @@ class InverseHeatModel(nn.Module):
         self.dt = dt
         self.n_even = (self.n % 2 == 0)
         
-        self.sigma = BandedSigma(self.nk, M)                    # (nk, M) float32
+        self.sigma = BandedSigma(self.nk, M)
 
         H_t = torch.from_numpy(H.astype(np.complex64))
         self.register_buffer("H_abs2", H_t.abs().pow(2))        # float32
@@ -280,7 +216,7 @@ class InverseHeatModel(nn.Module):
         g_trap_prev[:, :-1] = (g_prev[:, :-1] + g_prev[:, 1:]) / 2.0
         g_trap_prev[:,  -1] = g_prev[:, -1] / 2.0
 
-        # Correzione IC dalla finestra precedente
+        # Correction term
         G_prev              = torch.fft.rfft(g_prev, n=self.n, dim=1)                       # (N, nk)
         G_correction        = self.sigma(G_prev)                                            # (N, nk)
         
@@ -347,12 +283,10 @@ class InverseHeatModel(nn.Module):
         self.log_R.requires_grad_(True)
         
     def freeze_sigma(self):
-        for p in self.sigma.parameters():
-            p.requires_grad_(False)
+        self.sigma.freeze_sigma()
 
     def unfreeze_sigma(self):
-        for p in self.sigma.parameters():
-            p.requires_grad_(True)
+        self.sigma.unfreeze_sigma()
             
     def freeze_all(self):
         for p in self.parameters():
@@ -365,27 +299,64 @@ class InverseHeatModel(nn.Module):
     # ==========================================================
     # Utilities printing informations
     # ==========================================================
-    
-    def __repr__(self):
-        total_params = sum(p.numel() for p in self.parameters())
-        trainable_params = sum(
-            p.numel() for p in self.parameters() if p.requires_grad
-        )
+        
+    def summary(self):
+        """
+        """
+        nk, M = self.nk, self.sigma.M
 
-        sigma_params = sum(p.numel() for p in self.sigma.parameters())
+        print_line(char="=")
+        print_kv(f"Structure",f"nk={nk}  M={M}")
+        print_line()
 
-        return (
-            f"{self.__class__.__name__}(\n"
-            f"  nt                      =   {self.nt},\n"
-            f"  nk                      =   {self.nk},\n"
-            f"  n                       =   {self.n},\n"
-            f"  dt                      =   {self.dt},\n"
-            f"  sigma_bandwidth         =   {self.sigma.M},\n"
-            f"  sigma_parameters        =   {sigma_params:,},\n"
-            f"  total_parameters        =   {total_params:,},\n"
-            f"  trainable_parameters    =   {trainable_params:,}\n"
-            f")"
-        )
+        total_params     = sum(p.numel() for p in self.parameters())
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        frozen_params    = total_params - trainable_params
 
-    def __str__(self):
-        return self.__repr__()
+        print_kv(f"Total Parameters",   f"{total_params:>8,}")
+        print_kv(f"Trainable",          f"{trainable_params:>8,}")
+        print_kv(f"Frozen",             f"{frozen_params:>8,}")
+        print_line()
+
+        # -- Log R -----------------------------------------
+        log_R_learn = self.log_R.requires_grad
+        log_R_icon  = "Learn" if log_R_learn else "Frozen"
+        print_kv("Log_R",log_R_icon)
+        
+        # -- Phi -------------------------------------------
+        phi_raw_learn = self.phi_raw.requires_grad
+        phi_raw_icon  = "Learn" if phi_raw_learn else "Frozen"
+        print_kv("Phi",phi_raw_icon)
+                
+        # -- Sigma Diagonal --------------------------------
+        d0_learn = self.sigma.diag_0.requires_grad
+        d0_icon  = "Learn" if d0_learn else "Frozen"
+        print_kv("Diagonal",d0_icon)
+
+        # -- Sigma Off diagonal ----------------------------
+        if M > 0:
+            for m in range(1, M + 1):
+                re = self.sigma.diag_re[m - 1]
+                im = self.sigma.diag_im[m - 1]
+
+                re_learn = re.requires_grad
+                im_learn = im.requires_grad
+                shape    = str(tuple(re.shape))
+
+                if re_learn and im_learn:
+                    status = "Learn"
+                elif not re_learn and not im_learn:
+                    status = "Frozen"
+
+                print_kv(f"m={m}",status)
+               
+        # -- Sigma sparsity -------------------------------- 
+        n_elem_nonzero = nk + 2 * sum(nk - m for m in range(1, M + 1))
+        n_elem_total   = nk * nk
+        sparsity       = 1.0 - n_elem_nonzero / n_elem_total
+        
+        print_line()
+        print_kv(f"Non-zero elements ",f"{n_elem_nonzero:>8,}/{n_elem_total:,}")
+        print_kv(f"Sparsity",f"{sparsity:>7.1%}")
+        
+        print_line(char="=")
