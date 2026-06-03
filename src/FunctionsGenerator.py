@@ -1,4 +1,4 @@
-# functions_generator.py>
+# FunctionsGenerator.py>
 
 import numpy as np
 

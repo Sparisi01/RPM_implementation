@@ -1,4 +1,4 @@
-# model_learned_tikhonov.py>
+# LearnedTikhonov.py>
 
 import numpy as np
 import torch

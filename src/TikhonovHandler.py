@@ -1,4 +1,4 @@
-# tikhonov_handler.py>
+# TikhonovHandler.py>
 
 import numpy as np
 from src.print_utils import print_kv
