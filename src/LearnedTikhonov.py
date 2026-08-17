@@ -29,16 +29,32 @@ class LearnedTikhonov(nn.Module):
         self.register_buffer("H_abs2", H_t.abs().pow(2))   # float32
         self.register_buffer("H_conj", H_t.conj())          # complex64
 
+        # --------------------------------------------------
+        # Inizializzazione Tikhonov standard:
+        # R(omega) = lambda * omega^2
+        # --------------------------------------------------
+        lambda_tik = 1e-2
+        eps_R = 1e-12
+
+        freq = torch.fft.rfftfreq(n, d=dt)
+        omega = 2.0 * torch.pi * freq
+
+        R0 = lambda_tik * omega.pow(2)
+        R0 = torch.clamp(R0, min=eps_R)
+    
         self.phi_raw = nn.Parameter(torch.zeros(nk))
-        self.log_R   = nn.Parameter(torch.full((nk,), np.log(1e-2)))
+        #self.log_R   = nn.Parameter(torch.full((nk,), np.log(1e-2)))
+        self.log_R = nn.Parameter(torch.log(R0))
 
     def _get_phi(self) -> torch.Tensor:
         """Forza phi[0]=0 (DC). Se n pari forza anche phi[-1]=0 (Nyquist)."""
-        phi = self.phi_raw.clone()
+        """phi = self.phi_raw.clone() 
         phi[0] = 0.0
         if self.n_even:
-            phi[-1] = 0.0
-        return phi                                              # (nk,) float32
+            phi[-1] = 0.0"""
+        return torch.pi * torch.tanh(self.phi_raw)
+        #phi = 2 * torch.pi * torch.sigmoid(self.phi_raw)
+        #return phi                                       # (nk,) float32
 
     def _get_R(self) -> torch.Tensor:
         return torch.exp(self.log_R)                            # (nk,) float32, sempre > 0

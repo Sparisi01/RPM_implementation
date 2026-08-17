@@ -37,8 +37,8 @@ class FunctionsGenerator:
         f_hat = np.fft.rfft(f)
 
         # Define the power spectrum
-        S = self.sigma**2 * np.sqrt(2 * np.pi) * self.l * np.exp(-0.5 * self.l**2 * self.omegas**2)
-
+        #S = self.sigma**2 * np.sqrt(2 * np.pi) * self.l * np.exp(-0.5 * self.l**2 * self.omegas**2)
+        S = self.sigma**2 * self.l * np.exp(-0.5 * self.l**2 * self.omegas**2)
         # Perform convolution in Fourier space (Note: the factor 1/dt comes from the discretization of the numpy FFT,
         # it is required for keeping the right f variance)
         f_hat_filtered = f_hat * np.sqrt(S / self.dt)
