@@ -49,7 +49,7 @@ class NoiseGenerator:
     
     def correlated_noise(self, g_all: np.ndarray, 
                         noise_level: float, 
-                        correlation_factor: float = 0.3) -> np.ndarray:
+                        correlation_factor: float = 0.25) -> np.ndarray:
         """
         Noise correlated with observed signal (D ≠ 0).
         Simulates systematic sensor errors proportional to measurement.
@@ -76,7 +76,7 @@ class NoiseGenerator:
         sample_std = np.std(g_all, axis=1, keepdims=True)
         white_component = self.rng.normal(
             0.0,
-            noise_level * sample_std * 0.1,  # Smaller white noise
+            noise_level * sample_std * (1-correlation_factor),  # Smaller white noise
             size=g_all.shape
         ).astype(np.float32)
         
@@ -213,10 +213,6 @@ def print_noise_stats(noise: np.ndarray, scenario_name: str):
     print_kv("Max:",f"{np.max(np.abs(noise)):12.4e}")
     print_kv("Energy:",f"{np.sum(noise**2):12.4e}")
 
-
-# ============================================================================
-# Convenience function for notebook integration
-# ============================================================================
 
 def apply_noise_to_dataset(g_all: np.ndarray,
                           f_all: np.ndarray,

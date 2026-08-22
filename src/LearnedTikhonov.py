@@ -1,6 +1,7 @@
 # LearnedTikhonov.py>
 
 import numpy as np
+from sympy import Float
 import torch
 import torch.nn as nn
 
@@ -16,7 +17,7 @@ class LearnedTikhonov(nn.Module):
       log_R   : (nk) float32 
     """
 
-    def __init__(self, H: np.ndarray, n: int, nt: int, dt: float):
+    def __init__(self, H: np.ndarray, n: int, nt: int, dt: float, lambda_tik: float = 1e-2):
         super().__init__()
         self.n  = n
         self.nt = nt
@@ -33,7 +34,6 @@ class LearnedTikhonov(nn.Module):
         # Inizializzazione Tikhonov standard:
         # R(omega) = lambda * omega^2
         # --------------------------------------------------
-        lambda_tik = 1e-2
         eps_R = 1e-12
 
         freq = torch.fft.rfftfreq(n, d=dt)
