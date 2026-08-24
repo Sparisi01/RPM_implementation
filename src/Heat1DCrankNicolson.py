@@ -18,6 +18,13 @@ class Heat1DCrankNicolson:
         self.dt = Tf / nt
         self.dx = np.sqrt(D * self.dt / wanted_r)
         self.nx = int(L / self.dx) + 1
+        
+        if self.nx < 3:
+            print_kv("dt",self.dt)
+            print_kv("dx",self.dx)
+            print_kv("nx",self.nx)
+            raise ValueError("nx has to be at least 3")
+        
         self.dx = L / (self.nx - 1)
 
         self.r = D * self.dt / (self.dx ** 2)
