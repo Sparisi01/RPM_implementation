@@ -39,9 +39,14 @@ class TikhonovHandler:
         g_sim = self.solver.solve(f)[-1, :]
         
         misfit = np.linalg.norm(g_sim - g_target)**2
-        derivative_regularization = lambda_reg * np.linalg.norm(np.diff(f))**2
         
-        return misfit + derivative_regularization
+        second_derivative_regularization = (
+            lambda_reg * np.linalg.norm(np.diff(f, n=2), ord=1)
+        )
+        
+        #derivative_regularization = lambda_reg * np.linalg.norm(np.diff(f))**2
+        
+        return misfit + second_derivative_regularization
 
     def _build_W(
         self, 

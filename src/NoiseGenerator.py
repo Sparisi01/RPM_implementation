@@ -222,32 +222,17 @@ class NoiseGenerator:
     
     def correlated_noise(self, g_all: np.ndarray, 
                         noise_level: float, 
-                        correlation_factor: float = 0.25) -> np.ndarray:
+                        white_noise_factor: float = 0.25) -> np.ndarray:
         """
         Noise correlated with observed signal (D ≠ 0).
         Simulates systematic sensor errors proportional to measurement.
-        
-        n(t) = α·g(t) + ε(t)
-        where α = correlation_factor, ε ~ N(0, σ_white²)
-        
-        Example physical cause: 
-        - Sensor gain varies with temperature/measurement
-        - Signal-dependent amplifier noise
-        
-        Args:
-            g_all: Observed signal
-            noise_level: Base noise level
-            correlation_factor: Strength of correlation with g (0-1 typical)
-        
-        Returns:
-            Correlated noise array
         """
-        systematic = correlation_factor * g_all
+        systematic = noise_level * g_all
         
         sample_std = np.std(g_all, axis=1, keepdims=True)
         white_component = self.rng.normal(
             0.0,
-            noise_level * sample_std * (1-correlation_factor),
+            white_noise_factor * sample_std,
             size=g_all.shape
         ).astype(np.float32)
         

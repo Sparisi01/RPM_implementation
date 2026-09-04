@@ -4,7 +4,8 @@ import numpy as np
 from sympy import Float
 import torch
 import torch.nn as nn
-
+from typing import Literal, get_args, Tuple
+from src.print_utils import print_kv, print_section
 
 class LearnedTikhonov(nn.Module):
     """
@@ -36,15 +37,31 @@ class LearnedTikhonov(nn.Module):
         # --------------------------------------------------
         eps_R = 1e-12
 
-        freq = torch.fft.rfftfreq(n, d=dt)
-        omega = 2.0 * torch.pi * freq
+        self.freq = torch.fft.rfftfreq(n, d=dt)
+        self.omegas = 2.0 * torch.pi * self.freq
 
-        R0 = lambda_tik * omega.pow(2)
+        R0 = lambda_tik * self.omegas.pow(2)
         R0 = torch.clamp(R0, min=eps_R)
     
         self.phi_raw = nn.Parameter(torch.zeros(nk))
         #self.log_R   = nn.Parameter(torch.full((nk,), np.log(1e-2)))
         self.log_R = nn.Parameter(torch.log(R0))
+        
+        # --------------------------------------------------
+        # Mask degli elementi allenabili
+        # --------------------------------------------------
+        self.phi_mask = torch.zeros(nk, dtype=torch.bool)
+        self.R_mask   = torch.zeros(nk, dtype=torch.bool)
+    
+        # Gradiente nullo sugli elementi congelati
+        self.phi_raw.register_hook(
+            lambda grad: grad * self.phi_mask.to(grad.device)
+        )
+
+        self.log_R.register_hook(
+            lambda grad: grad * self.R_mask.to(grad.device)
+        )
+
 
     def _get_phi(self) -> torch.Tensor:
         """Forza phi[0]=0 (DC). Se n pari forza anche phi[-1]=0 (Nyquist)."""
@@ -98,3 +115,133 @@ class LearnedTikhonov(nn.Module):
     @torch.no_grad()
     def get_W_magnitude(self) -> np.ndarray:
         return self._build_W().abs().cpu().numpy()
+
+    def freeze_phi(self):
+            self.phi_raw.requires_grad_(False)
+    
+    def unfreeze_phi(self):
+        self.phi_raw.requires_grad_(True)
+
+    def freeze_R(self):
+        self.log_R.requires_grad_(False)
+
+    def unfreeze_R(self):
+        self.log_R.requires_grad_(True)
+    
+    def set_trainable_range(self, start, end, phi=True, R=True):
+        if phi:
+            self.phi_mask[:] = False
+            self.phi_mask[start:end] = True
+
+        if R:
+            self.R_mask[:] = False
+            self.R_mask[start:end] = True
+    
+    def set_tainable_range_by_omegas(self, min_omega, max_omega):
+        self.phi_mask = (self.omegas >= min_omega) & (self.omegas <= max_omega)
+        self.R_mask   = (self.omegas >= min_omega) & (self.omegas <= max_omega)
+
+def smoothness_regularization(model: LearnedTikhonov) -> torch.Tensor:
+    """Penalize sharp variations in R and Phi"""
+    dR   = model._get_R()[1:]   - model._get_R()[:-1]
+    dPhi = model._get_phi()[1:] - model._get_phi()[:-1]
+    return (dR ** 2).mean() + (dPhi ** 2).mean()
+
+_TYPES = Literal["ReduceLR", "Cosine"]
+
+def train(
+    model: LearnedTikhonov,
+    G_train: torch.Tensor,
+    F_train: torch.Tensor,
+    G_val:   torch.Tensor,
+    F_val:   torch.Tensor,
+    n_epochs: int        = 2000,
+    lr: float            = 1e-3,
+    weight_decay: float  = 0.0,
+    checkpoint_path: str = "assets/tikhonov_learned/best_tikhonov.pt",
+    scheduler_patience: int   = 50,
+    scheduler_factor:   float = 0.5,
+    log_every: int       = 50,
+    lambda_smooth: float = 0,
+    scheduler_type: _TYPES = "Cosine",
+    min_mse_index: int = 0,
+    max_mse_index: int = -1,
+    history = None
+) -> dict:
+    """Train LearnedTikhonov model with various options."""
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    
+    options = get_args(_TYPES)
+    assert scheduler_type in options, f"'{scheduler_type}' is not in {options}"
+    
+    if scheduler_type == "Cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer, T_0=2000, T_mult=2, eta_min=1e-6
+        )
+    elif scheduler_type == "ReduceLR":
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", patience=scheduler_patience, factor=scheduler_factor
+        )
+
+    loss_fn = nn.MSELoss()
+    
+    if history is None:
+        history = {"train_loss": [], "val_loss": [], "lr": []}
+    
+    best_val = float("inf")
+
+    for epoch in range(1, n_epochs + 1):
+        # Training Step
+        model.train()
+        optimizer.zero_grad()
+        
+        pred_train = model(G_train)
+        mse_train = loss_fn(pred_train[:,min_mse_index:max_mse_index], F_train[:,min_mse_index:max_mse_index])
+        loss_train = mse_train
+        
+        if lambda_smooth != 0:
+            reg_smooth = smoothness_regularization(model)
+            loss_train += lambda_smooth * reg_smooth
+        
+        loss_train.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+
+        # Validation Step
+        model.eval()
+        with torch.no_grad():
+            pred_val = model(G_val)
+            mse_val = loss_fn(pred_val[:,min_mse_index:max_mse_index], F_val[:,min_mse_index:max_mse_index])
+            loss_val = mse_val
+            
+            if lambda_smooth != 0:
+                reg_smooth = smoothness_regularization(model)
+                loss_val += lambda_smooth * reg_smooth
+
+        train_l = loss_train.item()
+        val_l = loss_val.item()
+        scheduler.step(epoch)
+        current_lr = optimizer.param_groups[0]["lr"]
+
+        history["train_loss"].append(train_l)
+        history["val_loss"].append(val_l)
+        history["lr"].append(current_lr)
+
+        if val_l < best_val:
+            best_val = val_l
+            torch.save({
+                "epoch": epoch,
+                "model_state": model.state_dict(),
+                "optimizer_state": optimizer.state_dict(),
+                "val_loss": best_val,
+            }, checkpoint_path)
+
+        if epoch % log_every == 0 or epoch == 1:
+            print(f"Epoch {epoch:5d}/{n_epochs} | train MSE: {train_l:.4e} | "
+                  f"val MSE: {val_l:.4e} | lr: {current_lr:.2e}")
+
+    print_kv(f"Best val MSE", f"{best_val:.4e}")
+    print_kv(f"Saved to", f"{checkpoint_path}")
+    
+    return history, best_val
