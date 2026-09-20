@@ -26,7 +26,7 @@ class LearnedTikhonov(nn.Module):
         nk = len(H)
         self.nk = nk
         self.n_even = (n % 2 == 0)
-
+        
         H_t = torch.from_numpy(H.astype(np.complex64))
         self.register_buffer("H_abs2", H_t.abs().pow(2))   # float32
         self.register_buffer("H_conj", H_t.conj())          # complex64
@@ -41,11 +41,12 @@ class LearnedTikhonov(nn.Module):
         self.omegas = 2.0 * torch.pi * self.freq
 
         R0 = lambda_tik * self.omegas.pow(2)
-        R0 = torch.clamp(R0, min=eps_R)
+        R0 = torch.clamp(R0, min=eps_R) + self.H_abs2
     
         self.phi_raw = nn.Parameter(torch.zeros(nk))
         #self.log_R   = nn.Parameter(torch.full((nk,), np.log(1e-2)))
         self.log_R = nn.Parameter(torch.log(R0))
+        #self.log_R = nn.Parameter(torch.arcsinh(R0))
         
         # --------------------------------------------------
         # Mask degli elementi allenabili
@@ -65,16 +66,19 @@ class LearnedTikhonov(nn.Module):
 
     def _get_phi(self) -> torch.Tensor:
         """Forza phi[0]=0 (DC). Se n pari forza anche phi[-1]=0 (Nyquist)."""
-        """phi = self.phi_raw.clone() 
+        
+        phi = self.phi_raw.clone() 
         phi[0] = 0.0
         if self.n_even:
-            phi[-1] = 0.0"""
+            phi[-1] = 0.0
+            
         return torch.pi * torch.tanh(self.phi_raw)
         #phi = 2 * torch.pi * torch.sigmoid(self.phi_raw)
         #return phi                                       # (nk,) float32
 
     def _get_R(self) -> torch.Tensor:
-        return torch.exp(self.log_R)                            # (nk,) float32, sempre > 0
+        return torch.exp(self.log_R) - self.H_abs2                           # (nk,) float32, sempre > 0
+        #return torch.sinh(self.log_R) 
 
     def _build_W(self) -> torch.Tensor:
         """Costruisce il filtro W (nk,) complex64."""
@@ -167,7 +171,7 @@ def train(
     min_mse_index: int = 0,
     max_mse_index: int = -1,
     history = None
-) -> dict:
+):
     """Train LearnedTikhonov model with various options."""
     
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)

@@ -178,9 +178,10 @@ def main():
     
 def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
     
+    DATASET_CODE = "dataset_sintetico_eltek/"+DATASET_CODE
     print_section(code)
     
-    VAL_FRACTION = 0.1
+    VAL_FRACTION = 0.5
     SEED = 42
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     
@@ -189,16 +190,20 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
     #print_section("LOADING DATA")
 
     # Load simulation parameters
-    L, Tf, nt, D, h_param, l, r, dt = load_simulation_info(DATASET_CODE)
+    L, Tf, nt, D, h_param, l, r, dt = load_simulation_info("dataset_sintetico_eltek/")
     n = int(2 * nt - 1)
 
     # Load impulse response
-    H_np, nk, omegas = load_impulse_response(DATASET_CODE, n, dt)
+    H_np, nk, omegas = load_impulse_response("dataset_sintetico_eltek/", n, dt)
     #print_kv("Impulse response", f"nk={nk}, n={n}")
 
     # Load dataset
-    f_all, g_all = load_dataset(DATASET_CODE)
+    f_all, g_all = load_dataset("dataset_sintetico_eltek/")
+    f_all = f_all[:300]
+    g_all = g_all[:300]
+    
     N = len(f_all)
+    
     #print_kv("Dataset", f"N={N}, nt={nt}")
     
     # Noise configuration - CHOOSE YOUR SCENARIO HERE
@@ -215,7 +220,7 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
     print_kv("Noise level", f"{noise_level*100:.1f}%")
 
     if noise_level > 0:
-        generator = NoiseGenerator(seed=SEED)
+        generator = NoiseGenerator()
         g_all, noise = generator.apply_noise(g_all, noise_level, noise_type)
         #print_noise_stats(noise, noise_type)
     else:
@@ -239,8 +244,8 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
     idx_val = idx[:n_val]
     idx_train = idx[n_val:]
 
-    #print_kv("Dataset split", f"total={N}, train={len(idx_train)}, val={n_val}")
-    #print_kv("Device", DEVICE)
+    print_kv("Dataset split", f"total={N}, train={len(idx_train)}, val={n_val}")
+    print_kv("Device", DEVICE)
 
     G_train = torch.from_numpy(g_all[idx_train]).to(DEVICE)
     F_train = torch.from_numpy(f_all[idx_train]).to(DEVICE)
@@ -249,7 +254,7 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
 
     # Initialize solver for comparison
     solver = Heat1DCrankNicolson(L=L, Tf=Tf, nt=nt, D=D, h=h_param, wanted_r=r)
-    #solver.info()
+    solver.info()
     th = TikhonovHandler(solver)
 
     # Compute and estimation for the best lambda 
