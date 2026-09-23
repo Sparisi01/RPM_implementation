@@ -2,7 +2,7 @@ from src.LearnedTikhonov import LearnedTikhonov
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from src.print_utils import print_kv, print_section
+from src.print_utils import print_kv
 
 def compute_mse_t(f_pred, f_true):
     return np.mean((f_pred - f_true) ** 2, axis=0)
@@ -60,13 +60,15 @@ def plot_prediction_RPM(model: LearnedTikhonov,
                    n_samples: int = 3,
                    save_path: str = "predictions.pdf",
                    min_mse_index: int = 0,
-                   max_mse_index: int = -1):
+                   max_mse_index: int = -1,
+                   index_shift:int = 0):
     model.eval()
     with torch.no_grad():
         f_pred = model(G_val).cpu().numpy()
     f_true = F_val.cpu().numpy()
     
-    plot_prediction(G_val,f_true,f_pred,model_name="RPM",n_samples=n_samples, save_path=save_path, min_mse_index=min_mse_index, max_mse_index=max_mse_index)
+    valMSE = plot_prediction(G_val,f_true,f_pred,model_name="RPM",n_samples=n_samples, save_path=save_path, min_mse_index=min_mse_index, max_mse_index=max_mse_index,index_shift=index_shift)
+    return valMSE
     
 def plot_prediction(G_val: torch.Tensor,
                    f_true,
@@ -75,7 +77,8 @@ def plot_prediction(G_val: torch.Tensor,
                    model_name: str = "Tikhonov",
                    save_path: str = "predictions.pdf",
                    min_mse_index: int = 0,
-                   max_mse_index: int = -1):
+                   max_mse_index: int = -1,
+                   index_shift:int = 0):
     nt = f_true.shape[1]
     t = np.arange(nt)
 
@@ -88,17 +91,20 @@ def plot_prediction(G_val: torch.Tensor,
     mse_array = np.mean((f_pred[:,min_mse_index:max_mse_index] - f_true[:,min_mse_index:max_mse_index]) ** 2, axis=1)
     
     for i, ax in enumerate(axes):
-        ax.plot(t, G_array[i], label=r"$g_{obs}$",ls="-.", c="k")
+        i = i + index_shift
+        ax.plot(t, G_array[i], label=r"$g_{obs}$", c="k")
         ax.plot(t, f_true[i], label=r"$f_{true}$", lw=3, c="b", alpha=0.5)
-        ax.plot(t, f_pred[i], label=r"$f_{rec}$",ls="--", c="r")
+        ax.plot(t, f_pred[i], label=r"$f_{rec}$", c="r")
         
         mse_i = mse_array[i]
+        
+       
         ax.text(0.12, 0.15, f"MSE = {mse_i:.3e}",
                 transform=ax.transAxes, verticalalignment='top')
         
         ax.set_ylabel(r"$\Theta$")
         ax.grid(True, alpha=0.3)
-        ax.set_ylim([-5, 5])
+        ax.set_ylim([-2.5, 2.5])
         
         if min_mse_index > 0:
             ax.axvline(x=min_mse_index, ls="--", c="k", alpha=0.5)

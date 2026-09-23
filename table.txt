@@ -1,4 +1,0 @@
-DEFAULT & $6.20 \times 10^{-9}$ & $2.27 \times 10^{-5}$ & $\sim 3658 \times$ & \ref{fig:comparisonfig_DEFAULT}, \ref{fig:loss_DEFAULT}, \ref{fig:diagnosticsfig_DEFAULT}\\
-WHITE25 & $2.57 \times 10^{-4}$ & $5.47 \times 10^{-3}$ & $\sim 21 \times$ & \ref{fig:comparisonfig_WHITE25}, \ref{fig:loss_WHITE25}, \ref{fig:diagnosticsfig_WHITE25}\\
-CORR10 & $2.21 \times 10^{-4}$ & $9.77 \times 10^{-3}$ & $\sim 44 \times$ & \ref{fig:comparisonfig_CORR10}, \ref{fig:loss_CORR10}, \ref{fig:diagnosticsfig_CORR10}\\
-CORR25 & $1.81 \times 10^{-4}$ & $2.99 \times 10^{-2}$ & $\sim 165 \times$ & \ref{fig:comparisonfig_CORR25}, \ref{fig:loss_CORR25}, \ref{fig:diagnosticsfig_CORR25}\\

@@ -31,10 +31,6 @@ class LearnedTikhonov(nn.Module):
         self.register_buffer("H_abs2", H_t.abs().pow(2))   # float32
         self.register_buffer("H_conj", H_t.conj())          # complex64
 
-        # --------------------------------------------------
-        # Inizializzazione Tikhonov standard:
-        # R(omega) = lambda * omega^2
-        # --------------------------------------------------
         eps_R = 1e-12
 
         self.freq = torch.fft.rfftfreq(n, d=dt)
@@ -48,17 +44,15 @@ class LearnedTikhonov(nn.Module):
         self.log_R = nn.Parameter(torch.log(R0))
         #self.log_R = nn.Parameter(torch.arcsinh(R0))
         
-        # --------------------------------------------------
-        # Mask degli elementi allenabili
-        # --------------------------------------------------
+        
+        # Mask trainable elements
         self.phi_mask = torch.zeros(nk, dtype=torch.bool)
         self.R_mask   = torch.zeros(nk, dtype=torch.bool)
     
-        # Gradiente nullo sugli elementi congelati
+        # Null Gradient on freezed parameters
         self.phi_raw.register_hook(
             lambda grad: grad * self.phi_mask.to(grad.device)
         )
-
         self.log_R.register_hook(
             lambda grad: grad * self.R_mask.to(grad.device)
         )

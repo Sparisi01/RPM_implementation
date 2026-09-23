@@ -18,7 +18,7 @@ import numpy as np
 
 plt.style.use("styles/plots.mplstyle")
 
- # Training configuration
+# Training configuration
 TRAINING_CONFIG = {
     "perform_training": True,
     "n_epochs": 5000,
@@ -182,7 +182,7 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
     print_section(code)
     
     VAL_FRACTION = 0.5
-    SEED = 42
+    SEED = 50
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     
     # ----------------------------------------------------------------------------------
@@ -331,6 +331,7 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
     
     if TRAINING_CONFIG["perform_training"]:
         
+        
         print_section("TRAINING PHI")
         model.unfreeze_phi()
         model.freeze_R()
@@ -351,6 +352,7 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
             min_mse_index=min_mse_index,
             max_mse_index=max_mse_index
         )
+        
         
         print_section("TRAINING R")
         model.unfreeze_R()
@@ -374,6 +376,7 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
                 history = history
             )
         
+        
         print_section("TRAINING BOTH")
         model.unfreeze_R()
         model.unfreeze_phi()
@@ -395,6 +398,7 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
                 max_mse_index=max_mse_index,
                 history = history
             )
+        
     else:
         print_kv("Training", "Skipped (perform_training=False)")
         history = None
@@ -418,11 +422,12 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
                     save_path=f"assets/tikhonov_learned/{DATASET_CODE}loss_history.pdf")
 
     # Plot predictions
-    plot_prediction_RPM(model, G_val.cpu(), F_val.cpu(),
+    RPM_best_val = plot_prediction_RPM(model, G_val.cpu(), F_val.cpu(),
                     n_samples=7,
                     save_path=f"assets/tikhonov_learned/{DATASET_CODE}predictions_RPM.pdf",
                     min_mse_index=min_mse_index,
-                    max_mse_index=max_mse_index)
+                    max_mse_index=max_mse_index,
+                    index_shift = 10)
     
     f_pred_th = np.ndarray(np.shape(f_true))
     i = 0
@@ -445,7 +450,8 @@ def perform_analysis(DATASET_CODE,NOISE_CONFIG, code):
     TIKH_best_val = plot_prediction(G_val.cpu(),f_true,f_pred_th,n_samples=7,
                 save_path=f"assets/tikhonov_learned/{DATASET_CODE}predictions_Tikh.pdf",
                 min_mse_index=min_mse_index,
-                max_mse_index=max_mse_index)
+                max_mse_index=max_mse_index,
+                index_shift = 10)
     
     return RPM_best_val,TIKH_best_val 
 
