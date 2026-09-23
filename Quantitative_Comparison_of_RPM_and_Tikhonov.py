@@ -1,6 +1,6 @@
 from scipy import datasets
 
-from src.LearnedTikhonov import LearnedTikhonov, train
+from src.RPM import LearnedTikhonov, train
 from src.print_utils import print_kv, print_section
 from src.Heat1DCrankNicolson import Heat1DCrankNicolson
 from src.TikhonovHandler import TikhonovHandler
