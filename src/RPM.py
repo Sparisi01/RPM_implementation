@@ -46,9 +46,12 @@ class LearnedTikhonov(nn.Module):
         
         
         # Mask trainable elements
-        self.phi_mask = torch.zeros(nk, dtype=torch.bool)
-        self.R_mask   = torch.zeros(nk, dtype=torch.bool)
+        #self.phi_mask = torch.zeros(nk, dtype=torch.bool)
+        #self.R_mask   = torch.zeros(nk, dtype=torch.bool)
     
+        self.register_buffer("phi_mask", torch.ones(nk, dtype=torch.bool))
+        self.register_buffer("R_mask", torch.ones(nk, dtype=torch.bool))
+        
         # Null Gradient on freezed parameters
         self.phi_raw.register_hook(
             lambda grad: grad * self.phi_mask.to(grad.device)
@@ -60,15 +63,11 @@ class LearnedTikhonov(nn.Module):
 
     def _get_phi(self) -> torch.Tensor:
         """Forza phi[0]=0 (DC). Se n pari forza anche phi[-1]=0 (Nyquist)."""
-        
-        phi = self.phi_raw.clone() 
-        phi[0] = 0.0
+        phi = torch.pi * torch.tanh(self.phi_raw)
+        phi[0] = 0.0  # Forza DC
         if self.n_even:
-            phi[-1] = 0.0
-            
-        return torch.pi * torch.tanh(self.phi_raw)
-        #phi = 2 * torch.pi * torch.sigmoid(self.phi_raw)
-        #return phi                                       # (nk,) float32
+            phi[-1] = 0.0  # Forza Nyquist
+        return phi
 
     def _get_R(self) -> torch.Tensor:
         return torch.exp(self.log_R) - self.H_abs2                           # (nk,) float32, sempre > 0

@@ -4,7 +4,7 @@ from src.RPM import LearnedTikhonov, train
 from src.print_utils import print_kv, print_section
 from src.Heat1DCrankNicolson import Heat1DCrankNicolson
 from src.TikhonovHandler import TikhonovHandler
-from src.NoiseGenerator import NoiseGenerator, print_noise_stats, apply_noise_to_dataset
+from src.NoiseGenerator import NoiseGenerator
 from typing import Literal, get_args, Tuple
 from src.LoadingHandler import load_dataset, load_impulse_response, load_simulation_info
 from src.PlottingHandler import plot_diagnostics, plot_history, plot_mse_t_comparison, plot_prediction, plot_prediction_RPM

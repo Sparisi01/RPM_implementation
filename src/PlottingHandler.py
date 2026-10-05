@@ -1,4 +1,4 @@
-from src.LearnedTikhonov import LearnedTikhonov
+from src.RPM import LearnedTikhonov
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
